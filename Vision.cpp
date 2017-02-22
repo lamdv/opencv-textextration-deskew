@@ -68,12 +68,14 @@ int main(int argc, const char** argv)
 	while (cap.read(frame))
 	{
 		i++;
-		//cap >> frame; // fetch a new frame from cap
+		cap >> frame; // fetch a new frame from cap
 		frames.push_back(frame); // add frame to vector
 		sharpness.push_back(frame_contrast_measure(frame)); // calculate contrast
-		if (i % 24 == 0)
+		if (i % 100 == 0)
 		{
-			//imshow("Test",get_sharpest_frame(sharpness, frames));
+			namedWindow("Display window", WINDOW_AUTOSIZE);// Create a window for display.
+			imshow("Display window",get_sharpest_frame(sharpness, frames));
+			getchar();
 			printf("%f, %d\n", max_value(sharpness), max_valued_key(sharpness));
 			frames.clear();
 			sharpness.clear();
