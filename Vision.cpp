@@ -27,6 +27,7 @@ double mean(std::vector<double> v);
 double medium(std::vector<double> v);
 int max_valued_key(vector<double> v);
 Mat get_sharpest_frame(std::vector<double> sharpness, std::vector<Mat> frames);
+int frame_extract(string inp_path, std::vector<Mat> &out);
 
 const char* keys =
 {
@@ -43,7 +44,7 @@ int main(int argc, const char** argv)
 		help();
 		return 0;
 	}
-	string inp_dir = "..\\Input_Sample\\";
+	string inp_dir = "C:\\Users\\User\\Source\\Repos\\opencv-textextration-deskew\\Sample\\";
 	stringstream inp_path;
 	if (parser.has("@inp"))
 		inp_path << inp_dir << parser.get<string>("@inp");
@@ -52,45 +53,63 @@ int main(int argc, const char** argv)
 		help();
 		return 0;
 	}
-	cout << "Measuring " << inp_path.str() << endl;
+	cout << "\nMeasuring " << inp_path.str() << endl;
+	vector<Mat> buffer;
+	if(frame_extract(inp_path.str(), buffer) == 0)
+	{
+		namedWindow("Display window", CV_WINDOW_AUTOSIZE);// Create a window for display.
+		imshow("Display window", buffer.at(4));
+	}
+	getchar();
+	return 0;
+}
 
+int frame_extract(string inp_path, std::vector<Mat> &out)
+{
 	VideoCapture cap;
-	cap.open(inp_path.str()); // open the media file
+	cap.open(inp_path); // open the media file
 
 	if (!cap.isOpened())  // check if file is opened
+	{
+		cout << "\nload failed";
+		getchar();
 		return -1;
+	}
 
 	Mat frame;
 	std::vector<Mat> frames; // vector of last 10 frames
 	std::vector<double> sharpness;
-	int i = 0;	
+	int i = 0;
 	//namedWindow("edges", 1); // for debug only
 	while (cap.read(frame))
 	{
 		i++;
-		cap >> frame; // fetch a new frame from cap
 		frames.push_back(frame); // add frame to vector
 		sharpness.push_back(frame_contrast_measure(frame)); // calculate contrast
-		if (i % 100 == 0)
+		Mat temp;
+		if (i % 96 == 0)
 		{
-			namedWindow("Display window", WINDOW_AUTOSIZE);// Create a window for display.
-			imshow("Display window",get_sharpest_frame(sharpness, frames));
-			getchar();
-			printf("%f, %d\n", max_value(sharpness), max_valued_key(sharpness));
+			//namedWindow("Display window", WINDOW_AUTOSIZE);// Create a window for display.
+			//imshow("Display window",get_sharpest_frame(sharpness, frames));
+			//getchar();
+			cout << max_value(sharpness) << ", " << max_valued_key(sharpness) << "\n";
+			temp = get_sharpest_frame(sharpness, frames);
+			out.push_back(temp);
 			frames.clear();
 			sharpness.clear();
 		}
 		//imshow("edges", frame); // for debug purpose
 	};
-	printf("Max Contrast: %f\nMean Contrast: %f\nMedian Contrast: %f", max_value(sharpness), mean(sharpness), medium(sharpness));
-	getchar();
+	frames.clear();
+	sharpness.clear();
+	//printf("Max Contrast: %f\nMean Contrast: %f\nMedian Contrast: %f", max_value(sharpness), mean(sharpness), medium(sharpness));
 	return 0;
 }
 
 // Image quality measure
 double frame_contrast_measure(const Mat&img)
 {
-	Mat dx, dy;
+	Mat dx, dy, temp;
 	Sobel(img, dx, CV_32F, 1, 0, 3);
 	Sobel(img, dy, CV_32F, 0, 1, 3);
 	magnitude(dx, dy, dx);

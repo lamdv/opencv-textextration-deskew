@@ -11,8 +11,8 @@ StdAfx.h, StdAfx.cpp
     These files are used to build a precompiled header (PCH) file
     named Vision.pch and a precompiled types file named StdAfx.obj.
 
-opencv
-	This folder contain the OpenCV library. Edit Linker when pull.
+Sample
+	Contain input samples
 
 /////////////////////////////////////////////////////////////////////////////
 Other notes:

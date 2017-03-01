@@ -33,4 +33,27 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Media Include="Sample\doan1.mp4">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="Sample\doan2.mp4">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="Sample\doan3.mp4">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="Sample\doan4.mp4">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="Sample\doan5.mp4">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="Sample\lamcc.mp4">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="Sample\lamcc2.mp4">
+      <Filter>Resource Files</Filter>
+    </Media>
+  </ItemGroup>
 </Project>
