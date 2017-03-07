@@ -30,6 +30,9 @@ int max_valued_key(vector<double> v);
 Mat get_sharpest_frame(std::vector<double> sharpness, std::vector<Mat> frames);
 int frame_extract(string inp_path, std::vector<Mat> &out);
 cv::Mat deskew(Mat &img);
+cv::Mat deskew(Mat &img, double angle);
+cv::Mat fourier_deskew(Mat &img);
+double skew_angle(cv::Mat &img);
 
 void display_image(Mat img)
 {
@@ -81,7 +84,6 @@ int main(int argc, const char** argv)
 	cout << "\nMeasuring " << inp_path.str() << endl;
 	vector<Mat> buffer;
 	frame_extract(inp_path.str(), buffer);
-	getchar();
 	return 0;
 }
 
@@ -113,16 +115,24 @@ int frame_extract(string inp_path, std::vector<Mat> &out)
 		{
 			cout << max_value(sharpness) << ", " << max_valued_key(sharpness) << "\n";
 			temp = get_sharpest_frame(sharpness, frames);
-			display_image(temp);
+			//display_image(temp);
 			Mat binary_temp;
 			double min, max;
 			cv::minMaxLoc(temp, &min, &max);
 			cv::cvtColor(temp, temp, cv::COLOR_RGB2GRAY);
-			temp = Scalar::all(255) - temp;
-			//cv::adaptiveThreshold(temp, temp, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 3, 2);
-			//cv::threshold(temp, temp, (min+max)/2, 255, cv::THRESH_BINARY_INV);
+			//temp = Scalar::all(255) - temp;
+			//cv::adaptiveThreshold(temp, temp, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 25, 2);
+			cv::threshold(temp, temp, (min+max)/2, 255, cv::THRESH_BINARY_INV);
+			//dilate(temp, temp, cv::getStructuringElement(cv::MORPH_CROSS, Size(3, 3), Point(-1, -1)));
 			display_image(temp);
-			display_image(deskew(temp));
+			display_image(fourier_deskew(temp));
+			/*stringstream _out;
+			_out << "E:\\Lam\\Output_Doan2\\Global\\"<<i/96<<".jpg";
+			vector<int> params;
+			params.push_back(CV_IMWRITE_JPEG_QUALITY);
+			params.push_back(95);
+			cv::cvtColor(temp, temp, cv::COLOR_GRAY2RGB);
+			imwrite(_out.str(), temp, params);*/
 			out.push_back(temp);
 			frames.clear();
 			sharpness.clear();
@@ -135,7 +145,13 @@ int frame_extract(string inp_path, std::vector<Mat> &out)
 	frames.clear();
 	sharpness.clear();
 	//printf("Max Contrast: %f\nMean Contrast: %f\nMedian Contrast: %f", max_value(sharpness), mean(sharpness), medium(sharpness));
+	cout << "Completed";
 	return 0;
+}
+
+cv::Mat deskew(Mat & img)
+{
+	return deskew(img, skew_angle(img));
 }
 
 // Image quality measure
@@ -199,11 +215,10 @@ Mat get_sharpest_frame(std::vector<double> sharpness, std::vector<Mat> frames)
 	return frames.at(max_valued_key(sharpness));
 }
 
-cv::Mat deskew(Mat &img)
+double skew_angle(cv::Mat & img)
 {
 	std::vector<cv::Vec4i> lines;
 	Size size = img.size();
-	double min, max;
 	cv::HoughLinesP(img, lines, 1, CV_PI / 180, 100, size.width / 2.f, 20);
 	cv::Mat disp_lines(size, CV_8UC1, cv::Scalar(0, 0, 0));
 	double angle = 0.;
@@ -217,8 +232,12 @@ cv::Mat deskew(Mat &img)
 	}
 	angle /= nb_lines; // mean angle, in radians.
 	angle *= 180 / CV_PI;
-	cout << "Skew angle: " << angle  << endl;
+	cout << "Skew angle: " << angle << endl;
+	return angle;
+}
 
+cv::Mat deskew(Mat &img, double angle)
+{
 	std::vector<cv::Point> points;
 	cv::Mat_<uchar>::iterator it = img.begin<uchar>();
 	cv::Mat_<uchar>::iterator end = img.end<uchar>();
@@ -231,4 +250,50 @@ cv::Mat deskew(Mat &img)
 	cv::Mat rotated;
 	cv::warpAffine(img, rotated, rot_mat, img.size(), cv::INTER_CUBIC);
 	return rotated;
+}
+
+cv::Mat fourier_deskew(Mat & img)
+{
+	// OpenCV Fourier Trasnform example
+	Mat padded;  //expand input image to optimal size
+	int m = getOptimalDFTSize(img.rows);
+	int n = getOptimalDFTSize(img.cols); // on the border add zero values
+	copyMakeBorder(img, padded, 0, m - img.rows, 0, n - img.cols, BORDER_CONSTANT, Scalar::all(0));
+
+	Mat planes[] = { Mat_<float>(padded), Mat::zeros(padded.size(), CV_32F) };
+	Mat complexI;
+	merge(planes, 2, complexI);
+
+	dft(complexI, complexI);
+
+	split(complexI, planes);
+	magnitude(planes[0], planes[1], planes[0]);
+	Mat magI = planes[0];
+
+	magI += Scalar::all(1);
+	log(magI, magI);
+
+	magI = magI(Rect(0, 0, magI.cols & -2, magI.rows & -2));
+
+	int cx = magI.cols / 2;
+	int cy = magI.rows / 2;
+
+	Mat q0(magI, Rect(0, 0, cx, cy));
+	Mat q1(magI, Rect(cx, 0, cx, cy));
+	Mat q2(magI, Rect(0, cy, cx, cy));
+	Mat q3(magI, Rect(cx, cy, cx, cy));
+
+	Mat tmp;
+	q0.copyTo(tmp);
+	q3.copyTo(q0);
+	tmp.copyTo(q3);
+
+	q1.copyTo(tmp);
+	q2.copyTo(q1);
+	tmp.copyTo(q2);
+
+	normalize(magI, magI, 0, 1, CV_MINMAX); // Transform the matrix with float values into a viewable image form (float between values 0 and 1).
+	/*double angle = skew_angle(magI);*/
+
+	return magI;
 }
