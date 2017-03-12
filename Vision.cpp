@@ -32,7 +32,9 @@ int frame_extract(string inp_path, std::vector<Mat> &out);
 cv::Mat deskew(Mat &img);
 cv::Mat deskew(Mat &img, double angle);
 cv::Mat fourier_deskew(Mat &img);
+cv::Mat histogram_deskew(Mat &img);
 double skew_angle(cv::Mat &img);
+void removeSmallBlobs(cv::Mat& im, double size);
 
 void display_image(Mat img)
 {
@@ -77,6 +79,7 @@ int main(int argc, const char** argv)
 			getchar();
 			return 0;
 		}
+		//cv::resize(img, img, Size(), 0.3, 0.3);
 		imshow("Deskewed", deskew(img));
 		waitKey(0);
 		return 0;
@@ -108,7 +111,8 @@ int frame_extract(string inp_path, std::vector<Mat> &out)
 	while (cap.read(frame))
 	{
 		i++;
-		cv::medianBlur(frame, frame, 5);
+		//cv::medianBlur(frame, frame, 5);
+		cv::resize(frame, frame, Size(), 0.3, 0.3);
 		frames.push_back(frame); // add frame to vector
 		sharpness.push_back(frame_contrast_measure(frame)); // calculate contrast
 		if (i % 96 == 0)
@@ -116,23 +120,30 @@ int frame_extract(string inp_path, std::vector<Mat> &out)
 			cout << max_value(sharpness) << ", " << max_valued_key(sharpness) << "\n";
 			temp = get_sharpest_frame(sharpness, frames);
 			//display_image(temp);
-			Mat binary_temp;
+			Mat _temp;
 			double min, max;
 			cv::minMaxLoc(temp, &min, &max);
 			cv::cvtColor(temp, temp, cv::COLOR_RGB2GRAY);
 			//temp = Scalar::all(255) - temp;
-			//cv::adaptiveThreshold(temp, temp, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 25, 2);
+			//cv::adaptiveThreshold(temp, temp, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 55, 2);
+			//cv::GaussianBlur(temp, temp, cv::Size(5, 5), 0, 0);
 			cv::threshold(temp, temp, (min+max)/2, 255, cv::THRESH_BINARY_INV);
 			//dilate(temp, temp, cv::getStructuringElement(cv::MORPH_CROSS, Size(3, 3), Point(-1, -1)));
-			display_image(temp);
-			display_image(fourier_deskew(temp));
-			/*stringstream _out;
-			_out << "E:\\Lam\\Output_Doan2\\Global\\"<<i/96<<".jpg";
+			/*display_image(temp);
+			display_image(fourier_deskew(temp));*/
+			/*removeSmallBlobs(temp, 50);*/
+			//cv::morphologyEx(temp, _temp, cv::MORPH_OPEN, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(11, 11)));
+			//cv::morphologyEx(_temp, _temp, cv::MORPH_CLOSE, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(11, 11)));
+			//display_image(temp);
+			//display_image(fourier_deskew(temp));
+			//display_image(deskew(temp));
+			stringstream _out;
+			_out << "Output_Doan2\\Global\\"<<i/96<<".jpg";
 			vector<int> params;
 			params.push_back(CV_IMWRITE_JPEG_QUALITY);
 			params.push_back(95);
-			cv::cvtColor(temp, temp, cv::COLOR_GRAY2RGB);
-			imwrite(_out.str(), temp, params);*/
+			cv::cvtColor(deskew(temp), temp, cv::COLOR_GRAY2RGB);
+			imwrite(_out.str(), temp, params);
 			out.push_back(temp);
 			frames.clear();
 			sharpness.clear();
@@ -218,8 +229,10 @@ Mat get_sharpest_frame(std::vector<double> sharpness, std::vector<Mat> frames)
 double skew_angle(cv::Mat & img)
 {
 	std::vector<cv::Vec4i> lines;
+	cv::Mat _temp;
 	Size size = img.size();
-	cv::HoughLinesP(img, lines, 1, CV_PI / 180, 100, size.width / 2.f, 20);
+	cv::Canny(img, _temp, 50, 200, 3);
+	cv::HoughLinesP(_temp, lines, 1, CV_PI / 180, 10, size.width / 2.f, 100);
 	cv::Mat disp_lines(size, CV_8UC1, cv::Scalar(0, 0, 0));
 	double angle = 0.;
 	unsigned nb_lines = lines.size();
@@ -230,10 +243,37 @@ double skew_angle(cv::Mat & img)
 		angle += atan2((double)lines[i][3] - lines[i][1],
 			(double)lines[i][2] - lines[i][0]);
 	}
+	cout << "No of lines: " << nb_lines << endl;
 	angle /= nb_lines; // mean angle, in radians.
 	angle *= 180 / CV_PI;
+	if (angle > 45)
+		angle = 90 - angle;
 	cout << "Skew angle: " << angle << endl;
+	//display_image(disp_lines);
 	return angle;
+}
+
+void removeSmallBlobs(cv::Mat & im, double size)
+{
+	{
+		// Only accept CV_8UC1
+		if (im.channels() != 1 || im.type() != CV_8U)
+			return;
+
+		// Find all contours
+		std::vector<std::vector<cv::Point> > contours;
+		cv::findContours(im.clone(), contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+
+		for (int i = 0; i < contours.size(); i++)
+		{
+			// Calculate contour area
+			double area = cv::contourArea(contours[i]);
+
+			// Remove small objects by drawing the contour with black color
+			if (area <= size)
+				cv::drawContours(im, contours, i, CV_RGB(0, 0, 0), -1);
+		}
+	}
 }
 
 cv::Mat deskew(Mat &img, double angle)
@@ -293,7 +333,17 @@ cv::Mat fourier_deskew(Mat & img)
 	tmp.copyTo(q2);
 
 	normalize(magI, magI, 0, 1, CV_MINMAX); // Transform the matrix with float values into a viewable image form (float between values 0 and 1).
-	/*double angle = skew_angle(magI);*/
+	
 
 	return magI;
 }
+
+cv::Mat histogram_deskew(Mat & img)
+{
+	cv::Mat hist;
+
+	return hist
+;
+}
+
+
